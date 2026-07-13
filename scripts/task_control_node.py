@@ -167,7 +167,7 @@ class TaskControlNode:
         
         # 1. Check for Direct Command
         tool_name, params = self.parse_direct_command(goal.user_prompt)
-        rospy.logwarn(f"Command parased: tool_name:{tool_name}, params:{params}")
+        rospy.logwarn(f"Command parsed: tool_name:{tool_name}, params:{params}")
         if tool_name:
             feedback.status = f"Direct command recognized. Executing '{tool_name}'..."
             self.action_server.publish_feedback(feedback)
@@ -189,12 +189,11 @@ class TaskControlNode:
         
         try:
             history_to_send = list(self.command_history) if self.enable_history else []
+            # Single LLM call: pass history when enabled (do not re-query without history).
             llm_res = self.llm_service_client(
-                user_prompt=goal.user_prompt, 
-                history=history_to_send
+                user_prompt=goal.user_prompt,
+                history=history_to_send,
             )
-            
-            llm_res = self.llm_service_client(user_prompt=goal.user_prompt)
             if not llm_res.success:
                 result.success = False
                 result.final_message = f"LLM query failed: {llm_res.error_message}"
