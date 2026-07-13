@@ -125,14 +125,3 @@ def parse_llm_response(plan_text, direct_parser_func=None):
         if tool_name:
             valid_commands.append(line)
     return valid_commands
-
-def redact_secret(value, visible_tail=4):
-    """Return a log-safe redaction of an API key or token. Never returns the full secret."""
-    if value is None:
-        return None
-    s = str(value).strip()
-    if not s:
-        return ""
-    if len(s) <= visible_tail:
-        return "***"
-    return f"***{s[-visible_tail:]}"

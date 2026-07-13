@@ -3,12 +3,11 @@ import os
 import sys
 import unittest
 
-# Allow importing utils without installing the ROS package
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from utils.llm_utils import redact_secret
+from utils.secrets import redact_secret
 
 
 class TestRedactSecret(unittest.TestCase):

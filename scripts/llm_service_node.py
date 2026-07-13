@@ -7,7 +7,8 @@ from llm_models.ollama_client import OllamaClient
 from llm_models.gemini_client import GeminiClient
 from llm_models.openai_protocol_client import GenericOpenAIClient
 from llm_models.custom_api_client import CustomApiClient
-from utils.llm_utils import get_system_prompts, redact_secret
+from utils.llm_utils import get_system_prompts
+from utils.secrets import redact_secret
 import os
 
 class LLMServiceNode:
