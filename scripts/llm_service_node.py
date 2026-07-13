@@ -6,7 +6,8 @@ from tello_llm_ros.srv import LLMQuery, LLMQueryResponse
 from llm_models.ollama_client import OllamaClient
 from llm_models.gemini_client import GeminiClient
 from llm_models.openai_protocol_client import GenericOpenAIClient
-from utils.llm_utils import get_system_prompts
+from llm_models.custom_api_client import CustomApiClient
+from utils.llm_utils import get_system_prompts, redact_secret
 import os
 
 class LLMServiceNode:
@@ -27,7 +28,8 @@ class LLMServiceNode:
         
         rospy.loginfo(f"Model type: {self.model_type}")
         rospy.loginfo(f"Model name: {self.model_name}")
-        rospy.loginfo(f"API key   : {self.api_key}")
+        # Never log full API keys / tokens (security hygiene).
+        rospy.loginfo(f"API key   : {redact_secret(self.api_key)}")
         rospy.loginfo(f"base url  : {self.base_url}")
         
         self.model = self._load_model()
