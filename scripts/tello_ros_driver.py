@@ -20,6 +20,7 @@ except ImportError:
     Tello = None
 
 from mock_tello import MockTello
+from utils.rc_limits import clamp_rc_channel
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
 from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
@@ -321,10 +322,10 @@ class TelloROSNode:
         self.last_cmd_vel_time = rospy.Time.now()
         self.current_twist = msg
         self.tello.send_rc_control(
-            int(-msg.linear.y * 100),
-            int(msg.linear.x * 100),
-            int(msg.linear.z * 100),
-            int(-msg.angular.z * 100)
+            clamp_rc_channel(-msg.linear.y * 100),
+            clamp_rc_channel(msg.linear.x * 100),
+            clamp_rc_channel(msg.linear.z * 100),
+            clamp_rc_channel(-msg.angular.z * 100)
         )
         
     def _print_progress_bar(self, iteration, total, prefix='', suffix='', length=50, fill='█'):
