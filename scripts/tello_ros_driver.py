@@ -20,6 +20,11 @@ except ImportError:
     Tello = None
 
 from mock_tello import MockTello
+from utils.move_bounds import (
+    angle_to_sdk_degrees,
+    clamp_video_duration_s,
+    distance_meters_to_sdk_cm,
+)
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
 from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
@@ -129,16 +134,11 @@ class TelloROSNode:
             
             try:
                 if unit == 'distance':
-                    value_in_sdk_units = int(req.value * 100)
-                    if not (20 <= value_in_sdk_units <= 500):
-                        raise ValueError("Distance must be between 0.2 and 5.0 meters.")
+                    value_in_sdk_units = distance_meters_to_sdk_cm(req.value)
                 elif unit == 'angle':
-                    if req.value > 10:
-                        value_in_sdk_units = int(req.value)
-                    else:
-                        value_in_sdk_units = int(req.value * 180.0 / pi)
-                    if not (1 <= value_in_sdk_units <= 360):
-                        raise ValueError(f"Angle must be between ~0.017 and ~6.28 radians (1-360 degrees), command is {req.value}")
+                    value_in_sdk_units = angle_to_sdk_degrees(req.value)
+                else:
+                    raise ValueError(f"Unknown unit '{unit}' for move handler.")
 
                 tello_function = getattr(self.tello, f"move_{command}" if unit == 'distance' else f"rotate_{command}")
                 tello_function(value_in_sdk_units)
@@ -177,6 +177,13 @@ class TelloROSNode:
 
 
     def record_video_service_cb(self, req):
+        try:
+            duration = clamp_video_duration_s(req.duration)
+        except ValueError as e:
+            message = str(e)
+            rospy.logwarn(message)
+            return RecordVideoResponse(success=False, message=message, file_path="")
+
         with self.recording_lock:
             if self.is_recording:
                 message = "Failed to start recording: another recording is already in progress."
@@ -186,12 +193,12 @@ class TelloROSNode:
             self.is_recording = True
 
         # 生成文件名和路径
-        filename = f"tello_video_{rospy.Time.now().to_sec():.0f}_{int(req.duration)}s.mp4"
+        filename = f"tello_video_{rospy.Time.now().to_sec():.0f}_{int(duration)}s.mp4"
         full_path = os.path.join(self.video_save_path, filename)
         # 创建并启动后台线程进行录制
-        recorder_thread = threading.Thread(target=self._video_recorder_thread, args=(req.duration, full_path))
+        recorder_thread = threading.Thread(target=self._video_recorder_thread, args=(duration, full_path))
         recorder_thread.start()
-        message = f"Successfully started recording for {req.duration} seconds. Video will be saved to {full_path}"
+        message = f"Successfully started recording for {duration} seconds. Video will be saved to {full_path}"
         rospy.loginfo(message)
         # 立即返回成功，表示录制已开始
         return RecordVideoResponse(success=True, message=message, file_path=full_path)
