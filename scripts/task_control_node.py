@@ -15,6 +15,7 @@ from tello_llm_ros.srv import TakePicture, TakePictureRequest, RecordVideo, Reco
 from tello_llm_ros.msg import ExecuteTaskAction, ExecuteTaskFeedback, ExecuteTaskResult
 
 from utils.llm_utils import parse_llm_response
+from utils.tool_params import coerce_finite_float, sanitize_history_length
 
 class TaskControlNode:
     def __init__(self):
@@ -104,13 +105,25 @@ class TaskControlNode:
                         match = re.match(trigger['pattern'], clean_input, re.IGNORECASE)
                         if match:
                             params = {}
+                            bad = False
                             for p_def in trigger.get('params', []):
                                 p_name = p_def['name']
-                                val = float(match.group(p_def['group']))
+                                try:
+                                    val = coerce_finite_float(
+                                        match.group(p_def['group']),
+                                        p_name,
+                                    )
+                                except (ValueError, IndexError):
+                                    bad = True
+                                    break
                                 unit = match.group(p_def['unit_group']) if 'unit_group' in p_def else None
-                                if unit in ['cm', 'centimeters']: val /= 100.0
-                                elif unit in ['deg', 'degree', 'degrees']: val *= pi / 180.0
+                                if unit in ['cm', 'centimeters']:
+                                    val /= 100.0
+                                elif unit in ['deg', 'degree', 'degrees']:
+                                    val *= pi / 180.0
                                 params[p_name] = val
+                            if bad:
+                                continue
                             return tool['name'], params
         return None, None
         
