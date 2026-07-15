@@ -20,6 +20,7 @@ except ImportError:
     Tello = None
 
 from mock_tello import MockTello
+from utils.flight_guards import battery_allows_takeoff, clamp_battery_percent_param
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
 from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
@@ -38,6 +39,9 @@ class TelloROSNode:
 
         # cmd_vel control
         self.use_sim = rospy.get_param("~use_sim", False)
+        self.min_takeoff_battery = clamp_battery_percent_param(
+            rospy.get_param("~min_takeoff_battery", 10), 10
+        )
         self.cmd_vel_timeout = rospy.Duration(rospy.get_param("~cmd_vel_timeout", 0.5))
         self.last_cmd_vel_time = rospy.Time.now()
 
@@ -399,6 +403,34 @@ class TelloROSNode:
 
     def takeoff_service(self, req):
         try:
+            if not self.use_sim:
+                try:
+                    battery_pct = self.tello.get_battery()
+                except Exception as e:
+                    message = f"Takeoff denied: could not read battery ({e})"
+                    rospy.logerr(message)
+                    return TriggerResponse(success=False, message=message)
+                if not battery_allows_takeoff(battery_pct, self.min_takeoff_battery):
+                    message = (
+                        f"Takeoff denied: battery {battery_pct}% "
+                        f"below minimum {self.min_takeoff_battery}%"
+                    )
+                    rospy.logwarn(message)
+                    return TriggerResponse(success=False, message=message)
+            else:
+                # Simulation: still honor battery when Mock reports a readable value.
+                try:
+                    battery_pct = self.tello.get_battery()
+                    if not battery_allows_takeoff(battery_pct, self.min_takeoff_battery):
+                        message = (
+                            f"Takeoff denied (sim): battery {battery_pct}% "
+                            f"below minimum {self.min_takeoff_battery}%"
+                        )
+                        rospy.logwarn(message)
+                        return TriggerResponse(success=False, message=message)
+                except Exception:
+                    pass
+
             self.tello.takeoff()
             self.z = self.takeoff_height
             self.last_update_time = rospy.Time.now()
