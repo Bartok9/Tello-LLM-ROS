@@ -20,6 +20,10 @@ except ImportError:
     Tello = None
 
 from mock_tello import MockTello
+try:
+    from utils.stunt_guards import battery_allows_stunt, clamp_battery_threshold
+except ImportError:
+    from stunt_guards import battery_allows_stunt, clamp_battery_threshold  # type: ignore
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
 from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
@@ -38,6 +42,9 @@ class TelloROSNode:
 
         # cmd_vel control
         self.use_sim = rospy.get_param("~use_sim", False)
+        self.min_flip_battery = clamp_battery_threshold(
+            rospy.get_param("~min_flip_battery", 20), default=20
+        )
         self.cmd_vel_timeout = rospy.Duration(rospy.get_param("~cmd_vel_timeout", 0.5))
         self.last_cmd_vel_time = rospy.Time.now()
 
@@ -421,6 +428,20 @@ class TelloROSNode:
     def _create_flip_service_handler(self, direction):
         def handler(req):
             try:
+                if not self.use_sim:
+                    try:
+                        pct = self.tello.get_battery()
+                    except Exception as bat_exc:
+                        msg = f"Flip {direction} denied: battery unreadable ({bat_exc})"
+                        rospy.logerr(msg)
+                        return TriggerResponse(success=False, message=msg)
+                    if not battery_allows_stunt(pct, self.min_flip_battery):
+                        msg = (
+                            f"Flip {direction} denied: battery {pct}% "
+                            f"below min_flip_battery={self.min_flip_battery}%"
+                        )
+                        rospy.logwarn(msg)
+                        return TriggerResponse(success=False, message=msg)
                 flip_func_name = f"flip_{direction}"
                 if hasattr(self.tello, flip_func_name):
                     getattr(self.tello, flip_func_name)()
