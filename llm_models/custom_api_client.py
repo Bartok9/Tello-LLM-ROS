@@ -4,6 +4,8 @@ import rospy
 import requests
 import time
 from .base import LLMBase
+from .message_history import pack_chat_messages
+
 
 class CustomApiClient(LLMBase):
     """
@@ -19,12 +21,17 @@ class CustomApiClient(LLMBase):
         self.headers = {'Content-Type': 'application/json'}
         rospy.loginfo(f"CustomApiClient initialized. Target server: {self.api_endpoint}")
 
-    def query(self, system_prompt, user_prompt):
+    def query(self, system_prompt, user_prompt, history=None):
+        messages = pack_chat_messages(system_prompt, user_prompt, history=history)
+        # Legacy fields for older LAN servers + messages for multi-turn clients
         payload = {
             "model": self.model_name,
             "system_prompt": system_prompt,
-            "user_prompt": user_prompt
+            "user_prompt": user_prompt,
+            "messages": messages,
         }
+        if history:
+            payload["history"] = list(history)
         
         try:
             response = requests.post(self.api_endpoint, headers=self.headers, json=payload, timeout=60)
