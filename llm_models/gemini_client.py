@@ -6,6 +6,8 @@ import time
 import requests
 import json
 from .base import LLMBase
+from .gemini_payload import pack_gemini_payload
+
 
 class GeminiClient(LLMBase):
     """
@@ -37,57 +39,64 @@ class GeminiClient(LLMBase):
     def query(self, system_prompt, user_prompt, history=None):
         """
         Queries the Gemini REST API using the 'requests' library.
+        Honors multi-turn history as alternating user/model parts.
         """
         start_time = time.time()
-        
-        # messages = [
-        #     {"role": "system", "content": system_prompt},
-        #     {"role": "user", "content": user_prompt}
-        # ]
-        
-        messages = [{"role": "system", "content": system_prompt}]
-        if history:
-            for i, message_content in enumerate(history):
-                role = "user" if i % 2 == 0 else "assistant"
-                messages.append({"role": role, "content": message_content})
-        messages.append({"role": "user", "content": user_prompt})
+        response_data = None
+        payload = pack_gemini_payload(system_prompt, user_prompt, history)
+        self.full_url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.model_name}:generateContent?key={self.api_key}"
+        )
 
-        payload = {
-            "model": self.model_name,
-            "contents": [{"parts": [{"text": f"{system_prompt}\n{user_prompt}"}]}]
-        }
-
-        self.full_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
-        
         try:
             response = requests.post(self.full_url, headers=self.headers, json=payload, timeout=60)
-            response.raise_for_status()  # 如果状态码不是2xx，则抛出异常
+            response.raise_for_status()
 
             duration_s = time.time() - start_time
             response_data = response.json()
-            
-            # 从响应中解析出需要的数据
-            # 根据 generateContent 的标准响应格式
-            plan_text = response_data['candidates'][0]['content']['parts'][0]['text']
-            
-            # REST API响应中通常不直接提供token数，需要单独API计算
-            # 为保持接口统一，暂时返回0
+
+            candidates = response_data.get("candidates") or []
+            if not candidates:
+                error_msg = "Gemini API returned no candidates"
+                rospy.logerr(error_msg)
+                return False, "", error_msg, duration_s, 0, 0
+
+            try:
+                plan_text = candidates[0]["content"]["parts"][0]["text"]
+            except (KeyError, IndexError, TypeError) as e:
+                error_msg = (
+                    f"Failed to parse Gemini API response. "
+                    f"Structure might be unexpected. Error: {e}"
+                )
+                rospy.logerr(error_msg)
+                rospy.logerr(f"Full Response: {response_data}")
+                return False, "", error_msg, duration_s, 0, 0
+
+            if not (plan_text or "").strip():
+                error_msg = "Gemini API returned empty plan text"
+                rospy.logerr(error_msg)
+                return False, "", error_msg, duration_s, 0, 0
+
+            # REST API response often omits token counts; keep interface stable.
             prompt_tokens = 0
             completion_tokens = 0
-
             return True, plan_text.strip(), "", duration_s, prompt_tokens, completion_tokens
 
         except requests.exceptions.RequestException as e:
             duration_s = time.time() - start_time
             error_msg = f"An error occurred with Gemini REST API: {e}"
             rospy.logerr(error_msg)
-            # 尝试打印API返回的详细错误信息
-            if e.response:
-                rospy.logerr(f"API Response: {e.response.text}")
+            if getattr(e, "response", None) is not None:
+                rospy.logerr(f"API Response body: {e.response.text}")
             return False, "", error_msg, duration_s, 0, 0
-        except (KeyError, IndexError) as e:
+        except (KeyError, IndexError, TypeError) as e:
             duration_s = time.time() - start_time
-            error_msg = f"Failed to parse Gemini API response. Structure might be unexpected. Error: {e}"
+            error_msg = (
+                f"Failed to parse Gemini API response. "
+                f"Structure might be unexpected. Error: {e}"
+            )
             rospy.logerr(error_msg)
-            rospy.logerr(f"Full Response: {response_data}")
+            if response_data is not None:
+                rospy.logerr(f"Full Response: {response_data}")
             return False, "", error_msg, duration_s, 0, 0
