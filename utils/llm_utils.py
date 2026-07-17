@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 
+import importlib
 import json
-import re
-import rospy
 import os
+import re
+import subprocess
+import sys
+
+import rospy
 
 # ANSI color codes for terminal
 class bcolors:
@@ -16,31 +20,42 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-    
+
+
+def try_import(package_name):
+    """Attempt to import package_name. Returns (ok: bool, error: str|None)."""
+    try:
+        importlib.import_module(package_name)
+        return True, None
+    except ImportError as e:
+        return False, str(e)
+    except Exception as e:
+        return False, str(e)
+
 
 def install_and_import(package_name):
     """
     尝试导入一个包，如果失败则尝试使用 pip 安装它。
     """
-    try:
-        # 尝试导入
-        importlib.import_module(package_name)
+    ok, err = try_import(package_name)
+    if ok:
         print(f"'{package_name}' 已经安装。")
-    except ImportError:
-        print(f"'{package_name}' 未找到。正在尝试安装...")
-        try:
-            # 执行 pip install 命令
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
-            print(f"'{package_name}' 安装成功。")
-            # 再次尝试导入
-            importlib.import_module(package_name)
-        except subprocess.CalledProcessError:
-            print(f"错误：安装 '{package_name}' 失败。请手动运行 'pip install {package_name}'。")
+        return
+    print(f"'{package_name}' 未找到。正在尝试安装... ({err})")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+        print(f"'{package_name}' 安装成功。")
+        ok2, err2 = try_import(package_name)
+        if not ok2:
+            print(f"安装后仍无法导入 '{package_name}': {err2}")
             sys.exit(1)
-        except Exception as e:
-            print(f"发生未知错误: {e}")
-            sys.exit(1)
-    
+    except subprocess.CalledProcessError:
+        print(f"错误：安装 '{package_name}' 失败。请手动运行 'pip install {package_name}'。")
+        sys.exit(1)
+    except Exception as e:
+        print(f"发生未知错误: {e}")
+        sys.exit(1)
+
     
 # Judge file type
 def get_file_type(file_path: str) -> str:
