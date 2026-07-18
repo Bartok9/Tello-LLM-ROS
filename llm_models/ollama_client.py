@@ -4,6 +4,25 @@ import rospy
 import ollama
 from .base import LLMBase
 
+
+def sanitize_ollama_timeout(value, default=150.0, min_s=1.0, max_s=600.0):
+    """Return a positive finite timeout in [min_s, max_s]; invalid input -> default.
+
+    bool is rejected (bool is a subclass of int) so True does not become 1.0s.
+    """
+    if isinstance(value, bool) or value is None:
+        return float(default)
+    try:
+        t = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    if t != t or t in (float("inf"), float("-inf")):  # NaN/inf
+        return float(default)
+    if t < float(min_s) or t > float(max_s):
+        return float(default)
+    return float(t)
+
+
 class OllamaClient(LLMBase):
     """
     Ollama implementation of the LLMBase.
@@ -14,7 +33,7 @@ class OllamaClient(LLMBase):
         Initializes the Ollama client.
         kwargs can include 'timeout'.
         """
-        self.timeout = kwargs.get('timeout', 150.0)
+        self.timeout = sanitize_ollama_timeout(kwargs.get('timeout', 150.0))
         try:
             self.client = ollama.Client(timeout=self.timeout)
             self.client.list()
