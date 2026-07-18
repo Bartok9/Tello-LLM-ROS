@@ -6,6 +6,37 @@ import time
 from openai import OpenAI
 from .base import LLMBase
 
+
+def sanitize_openai_timeout(value, default=60.0, min_s=1.0, max_s=600.0):
+    """Positive finite HTTP timeout in [min_s, max_s]; invalid -> default. bool rejected."""
+    if isinstance(value, bool) or value is None:
+        return float(default)
+    try:
+        t = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    if t != t or t in (float("inf"), float("-inf")):
+        return float(default)
+    if t < float(min_s) or t > float(max_s):
+        return float(default)
+    return float(t)
+
+
+def validate_openai_base_url(url):
+    """Require non-empty http(s) base URL; return stripped URL or raise ValueError."""
+    if url is None:
+        raise ValueError("Base URL is missing.")
+    if not isinstance(url, str):
+        raise ValueError("Base URL must be a string.")
+    cleaned = url.strip()
+    if not cleaned:
+        raise ValueError("Base URL is missing.")
+    lower = cleaned.lower()
+    if not (lower.startswith("http://") or lower.startswith("https://")):
+        raise ValueError("Base URL must start with http:// or https://")
+    return cleaned
+
+
 class GenericOpenAIClient(LLMBase):
     """
     A generic client for any API that is compatible with the OpenAI protocol.
@@ -19,19 +50,23 @@ class GenericOpenAIClient(LLMBase):
         api_key = os.getenv(api_key_env_name) or kwargs.get('api_key')
         
         base_url = kwargs.get('base_url')
+        timeout = sanitize_openai_timeout(kwargs.get('timeout', 60.0))
 
         if not api_key:
             rospy.logerr(f"API Key not found. Please set the {api_key_env_name} env var or 'api_key' ROS param.")
             raise ValueError("API Key is missing.")
         
-        if not base_url:
-            rospy.logerr("Base URL not found. Please set the 'base_url' ROS param for this client.")
-            raise ValueError("Base URL is missing.")
+        try:
+            base_url = validate_openai_base_url(base_url)
+        except ValueError as ve:
+            rospy.logerr(f"Base URL invalid: {ve}. Please set the 'base_url' ROS param for this client.")
+            raise
 
         try:
             self.client = OpenAI(
                 api_key=api_key,
-                base_url=base_url
+                base_url=base_url,
+                timeout=timeout,
             )
             rospy.loginfo(f"GenericOpenAIClient initialized for model '{self.model_name}' at endpoint '{base_url}'")
         except Exception as e:
