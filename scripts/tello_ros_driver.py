@@ -20,9 +20,11 @@ except ImportError:
     Tello = None
 
 from mock_tello import MockTello
+from utils.safety_guards import sanitize_cmd_vel_timeout_sec
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
 from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
+
 
 class TelloROSNode:
     def __init__(self):
@@ -38,7 +40,7 @@ class TelloROSNode:
 
         # cmd_vel control
         self.use_sim = rospy.get_param("~use_sim", False)
-        self.cmd_vel_timeout = rospy.Duration(rospy.get_param("~cmd_vel_timeout", 0.5))
+        self.cmd_vel_timeout = rospy.Duration(sanitize_cmd_vel_timeout_sec(rospy.get_param("~cmd_vel_timeout", 0.5)))
         self.last_cmd_vel_time = rospy.Time.now()
 
         # Picture Save
