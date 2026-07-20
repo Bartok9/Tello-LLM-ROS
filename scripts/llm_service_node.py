@@ -9,6 +9,26 @@ from llm_models.openai_protocol_client import GenericOpenAIClient
 from utils.llm_utils import get_system_prompts
 import os
 
+
+import math
+
+
+def sanitize_llm_service_timeout(value, default=150.0, min_s=1.0, max_s=600.0):
+    """Return a positive finite HTTP timeout in [min_s, max_s]; else default."""
+    try:
+        if isinstance(value, bool):
+            raise TypeError("bool not allowed")
+        t = float(value)
+        if not math.isfinite(t) or t <= 0:
+            return float(default)
+        if t < min_s:
+            return float(min_s)
+        if t > max_s:
+            return float(max_s)
+        return t
+    except (TypeError, ValueError):
+        return float(default)
+
 class LLMServiceNode:
     def __init__(self):
         rospy.init_node('llm_service_node')
@@ -18,7 +38,7 @@ class LLMServiceNode:
         self.api_key = rospy.get_param("~api_key", None)
         self.base_url = rospy.get_param("~base_url", None)
         self.enable_deep_thinking = rospy.get_param("~enable_deep_thinking", False)
-        self.timeout = rospy.get_param("~timeout", 150.0)
+        self.timeout = sanitize_llm_service_timeout(rospy.get_param("~timeout", 150.0))
         
         common_system_prompt_file = rospy.get_param("~common_system_prompt_file")
         tools_description_file = rospy.get_param("~tools_description_file")
