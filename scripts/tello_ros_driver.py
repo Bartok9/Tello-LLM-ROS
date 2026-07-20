@@ -10,6 +10,7 @@ import cv2
 from cv_bridge import CvBridge
 import tf
 from math import sin, cos, pi
+import math
 import numpy as np
 import os, threading, sys
 
@@ -23,6 +24,15 @@ from mock_tello import MockTello
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
 from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
+
+
+
+def is_finite_pose_xy_yaw(x, y, yaw):
+    """Return True iff x, y, yaw are finite floats (reject NaN/Inf)."""
+    try:
+        return math.isfinite(float(x)) and math.isfinite(float(y)) and math.isfinite(float(yaw))
+    except (TypeError, ValueError):
+        return False
 
 class TelloROSNode:
     def __init__(self):
@@ -356,6 +366,13 @@ class TelloROSNode:
         # 更新无人机的状态
         # 注意：只更新 x, y 和 yaw，因为这是 "2D" 位姿估计。
         # 保持当前的 z (高度) 不变，因为 RViz 的2D估计通常不包含准确的高度信息。
+        if not is_finite_pose_xy_yaw(pose.position.x, pose.position.y, yaw):
+            rospy.logwarn(
+                f"[{self.drone_name}] Ignoring non-finite initial pose "
+                f"(x={pose.position.x}, y={pose.position.y}, yaw={yaw})."
+            )
+            return
+
         self.x = pose.position.x
         self.y = pose.position.y
         self.yaw = yaw
