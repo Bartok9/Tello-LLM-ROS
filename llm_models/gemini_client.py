@@ -32,6 +32,18 @@ class GeminiClient(LLMBase):
             'Content-Type': 'application/json',
         }
         self.full_url = f"{self.base_url}?key={self.api_key}"
+        import math
+        raw_timeout = kwargs.get("timeout", 60.0)
+        try:
+            if isinstance(raw_timeout, bool):
+                raise TypeError("bool")
+            t = float(raw_timeout)
+            if not math.isfinite(t) or t <= 0:
+                t = 60.0
+            t = max(1.0, min(600.0, t))
+        except (TypeError, ValueError):
+            t = 60.0
+        self.timeout = t
         rospy.loginfo(f"GeminiClient (REST API) initialized for model: {self.model_name}")
 
     def query(self, system_prompt, user_prompt, history=None):
@@ -60,7 +72,7 @@ class GeminiClient(LLMBase):
         self.full_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
         
         try:
-            response = requests.post(self.full_url, headers=self.headers, json=payload, timeout=60)
+            response = requests.post(self.full_url, headers=self.headers, json=payload, timeout=self.timeout)
             response.raise_for_status()  # 如果状态码不是2xx，则抛出异常
 
             duration_s = time.time() - start_time

@@ -58,7 +58,12 @@ class LLMServiceNode:
                 )
             elif model_type_lower == 'gemini':
                 api_key = rospy.get_param("~api_key", None)
-                return GeminiClient(self.model_name, api_key=api_key, base_url=base_url)
+                return GeminiClient(
+                    self.model_name,
+                    api_key=api_key,
+                    base_url=base_url,
+                    timeout=self.timeout,
+                )
             elif model_type_lower == 'custom_api':
                 server_url = rospy.get_param("~server_url", None)
                 return CustomApiClient(self.model_name, server_url=server_url)
