@@ -28,10 +28,25 @@ class GenericOpenAIClient(LLMBase):
             rospy.logerr("Base URL not found. Please set the 'base_url' ROS param for this client.")
             raise ValueError("Base URL is missing.")
 
+        # Request timeout seconds (fail-closed sanitize)
+        import math
+        raw_timeout = kwargs.get('timeout', 60.0)
+        try:
+            if isinstance(raw_timeout, bool):
+                raise TypeError('bool')
+            t = float(raw_timeout)
+            if not math.isfinite(t) or t <= 0:
+                t = 60.0
+            t = max(1.0, min(600.0, t))
+        except (TypeError, ValueError):
+            t = 60.0
+        self.timeout = t
+
         try:
             self.client = OpenAI(
                 api_key=api_key,
-                base_url=base_url
+                base_url=base_url,
+                timeout=self.timeout,
             )
             rospy.loginfo(f"GenericOpenAIClient initialized for model '{self.model_name}' at endpoint '{base_url}'")
         except Exception as e:

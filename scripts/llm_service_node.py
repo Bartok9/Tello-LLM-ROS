@@ -54,7 +54,8 @@ class LLMServiceNode:
                 return GenericOpenAIClient(
                     self.model_name,
                     api_key=api_key,
-                    base_url=base_url
+                    base_url=base_url,
+                    timeout=self.timeout,
                 )
             elif model_type_lower == 'gemini':
                 api_key = rospy.get_param("~api_key", None)
