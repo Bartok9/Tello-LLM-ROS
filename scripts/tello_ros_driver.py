@@ -22,7 +22,13 @@ except ImportError:
 from mock_tello import MockTello
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
-from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
+from tello_llm_ros.srv import RecordVideo, RecordVideoResponse
+try:
+    from utils.path_guards import resolve_confined_media_dir
+except ImportError:
+    # ROS package path layout may put utils on sys.path via package share / cwd
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    from utils.path_guards import resolve_confined_media_dir
 
 class TelloROSNode:
     def __init__(self):
@@ -41,14 +47,23 @@ class TelloROSNode:
         self.cmd_vel_timeout = rospy.Duration(rospy.get_param("~cmd_vel_timeout", 0.5))
         self.last_cmd_vel_time = rospy.Time.now()
 
-        # Picture Save
-        self.image_save_path = rospy.get_param("~image_save_path", os.path.join(os.path.expanduser('~'), '.ros', 'tello_captures'))
+        # Picture / video save dirs — confined under ~/.ros (fail-closed)
+        _default_ros = os.path.join(os.path.expanduser('~'), '.ros')
+        self.image_save_path = resolve_confined_media_dir(
+            rospy.get_param("~image_save_path", None),
+            "tello_captures",
+            allowed_root=_default_ros,
+        )
         if not os.path.exists(self.image_save_path):
             os.makedirs(self.image_save_path)
             rospy.loginfo(f"Created image save directory: {self.image_save_path}")
         
         # Vide Save
-        self.video_save_path = rospy.get_param("~video_save_path", os.path.join(os.path.expanduser('~'), '.ros', 'tello_videos'))
+        self.video_save_path = resolve_confined_media_dir(
+            rospy.get_param("~video_save_path", None),
+            "tello_videos",
+            allowed_root=_default_ros,
+        )
         if not os.path.exists(self.video_save_path):
             os.makedirs(self.video_save_path)
             rospy.loginfo(f"Created video save directory: {self.video_save_path}")
