@@ -100,6 +100,19 @@ def get_system_prompts(prefix_file_path:str, tools_file:str):
 
 
 def parse_llm_response(plan_text, direct_parser_func=None):
+    # Fail-closed: bad LLM clients / service layers may return None or non-str.
+    if plan_text is None:
+        rospy.logwarn("System: plan_text is None; treating as empty plan.")
+        return []
+    if not isinstance(plan_text, str):
+        rospy.logwarn(
+            "System: plan_text must be str (got %s); treating as empty plan."
+            % type(plan_text).__name__
+        )
+        return []
+    if not plan_text.strip():
+        return []
+
     # 只匹配生成的最后一对
     regex = r".*\[START_COMMANDS\](.*?)\[END_COMMANDS\]"
     match = re.search(regex, plan_text, re.DOTALL)
