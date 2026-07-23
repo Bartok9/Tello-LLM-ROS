@@ -6,6 +6,7 @@ import time
 import requests
 import json
 from .base import LLMBase
+from utils.model_name_guards import sanitize_gemini_model_id
 
 class GeminiClient(LLMBase):
     """
@@ -27,12 +28,18 @@ class GeminiClient(LLMBase):
         if not self.base_url:
             rospy.logerr("Gemini base_url not found. Please set the 'base_url' ROS param.")
             raise ValueError("Gemini base_url is missing.")
+
+        ok, safe_model_id, model_err = sanitize_gemini_model_id(self.model_name)
+        if not ok:
+            rospy.logerr("Gemini model_name rejected: {0}".format(model_err))
+            raise ValueError("Invalid Gemini model_name: {0}".format(model_err))
+        self.safe_model_id = safe_model_id
         
         self.headers = {
             'Content-Type': 'application/json',
         }
         self.full_url = f"{self.base_url}?key={self.api_key}"
-        rospy.loginfo(f"GeminiClient (REST API) initialized for model: {self.model_name}")
+        rospy.loginfo(f"GeminiClient (REST API) initialized for model: {self.safe_model_id}")
 
     def query(self, system_prompt, user_prompt, history=None):
         """
@@ -53,11 +60,11 @@ class GeminiClient(LLMBase):
         messages.append({"role": "user", "content": user_prompt})
 
         payload = {
-            "model": self.model_name,
+            "model": self.safe_model_id,
             "contents": [{"parts": [{"text": f"{system_prompt}\n{user_prompt}"}]}]
         }
 
-        self.full_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
+        self.full_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.safe_model_id}:generateContent?key={self.api_key}"
         
         try:
             response = requests.post(self.full_url, headers=self.headers, json=payload, timeout=60)
