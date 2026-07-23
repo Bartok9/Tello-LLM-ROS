@@ -5,6 +5,7 @@ import os
 import time
 from openai import OpenAI
 from .base import LLMBase
+from utils.openai_content_guards import normalize_message_content
 
 class GenericOpenAIClient(LLMBase):
     """
@@ -61,11 +62,20 @@ class GenericOpenAIClient(LLMBase):
             duration_s = time.time() - start_time
 
             plan_text = response.choices[0].message.content
+            ok, text, content_err = normalize_message_content(plan_text)
             usage = response.usage
             prompt_tokens = usage.prompt_tokens if usage else 0
             completion_tokens = usage.completion_tokens if usage else 0
 
-            return True, plan_text.strip(), "", duration_s, prompt_tokens, completion_tokens
+            if not ok:
+                rospy.logerr(
+                    "OpenAI-compatible API returned unusable message content: {0}".format(
+                        content_err
+                    )
+                )
+                return False, "", content_err, duration_s, prompt_tokens, completion_tokens
+
+            return True, text, "", duration_s, prompt_tokens, completion_tokens
 
         except Exception as e:
             duration_s = time.time() - start_time
