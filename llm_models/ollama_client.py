@@ -12,13 +12,28 @@ class OllamaClient(LLMBase):
     def _initialize(self, **kwargs):
         """
         Initializes the Ollama client.
-        kwargs can include 'timeout'.
+        kwargs can include 'timeout', and optional 'host' / 'base_url'
+        (http(s) only; invalid values fall back to the library default host).
         """
         self.timeout = kwargs.get('timeout', 150.0)
+        raw_host = kwargs.get('host', None)
+        if raw_host is None:
+            raw_host = kwargs.get('base_url', None)
         try:
-            self.client = ollama.Client(timeout=self.timeout)
+            from utils.http_url_guards import sanitize_http_base_url
+            self.host = sanitize_http_base_url(raw_host, default=None)
+        except Exception:
+            self.host = None
+        try:
+            client_kwargs = {"timeout": self.timeout}
+            if self.host:
+                client_kwargs["host"] = self.host
+            self.client = ollama.Client(**client_kwargs)
             self.client.list()
-            rospy.loginfo(f"Successfully connected to Ollama client. Model: {self.model_name}")
+            host_msg = self.host or "(default)"
+            rospy.loginfo(
+                f"Successfully connected to Ollama client. Model: {self.model_name} host={host_msg}"
+            )
         except Exception as e:
             rospy.logfatal(f"Failed to connect to Ollama. Is the server running? Error: {e}")
             raise

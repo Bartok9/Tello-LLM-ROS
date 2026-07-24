@@ -47,7 +47,11 @@ class LLMServiceNode:
 
         try:
             if model_type_lower == 'ollama':
-                return OllamaClient(self.model_name, timeout=self.timeout)
+                return OllamaClient(
+                    self.model_name,
+                    timeout=self.timeout,
+                    base_url=base_url or self.base_url,
+                )
             elif model_type_lower in openai_compatible_types:
                 # 对于所有兼容OpenAI协议的模型，统一调用通用客户端
                 api_key = rospy.get_param("~api_key", None)
