@@ -6,6 +6,7 @@ from tello_llm_ros.srv import LLMQuery, LLMQueryResponse
 from llm_models.ollama_client import OllamaClient
 from llm_models.gemini_client import GeminiClient
 from llm_models.openai_protocol_client import GenericOpenAIClient
+from llm_models.custom_api_client import CustomApiClient
 from utils.llm_utils import get_system_prompts
 import os
 
@@ -61,7 +62,11 @@ class LLMServiceNode:
                 return GeminiClient(self.model_name, api_key=api_key, base_url=base_url)
             elif model_type_lower == 'custom_api':
                 server_url = rospy.get_param("~server_url", None)
-                return CustomApiClient(self.model_name, server_url=server_url)
+                return CustomApiClient(
+                    self.model_name,
+                    server_url=server_url,
+                    timeout=self.timeout,
+                )
             else:
                 rospy.logerr(f"Unsupported model type: {self.model_type}")
                 return None
