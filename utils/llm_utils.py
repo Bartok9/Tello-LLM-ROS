@@ -72,30 +72,51 @@ def get_system_prompts(prefix_file_path:str, tools_file:str):
         rospy.logerr(f"Failed to load prefix prompt from {prefix_file_path}. Continuing without it.")
         prefix_prompt = ""
     
-    if get_file_type(tools_file) == 'txt':
-        subfix_prompt = load_txt_file(tools_file)
-    else:   # json
-        with open(tools_file, 'r') as f:
-            json_contents = json.load(f)
-        simplified_tools = []
-        for tool in json_contents['tools']:
-            simplified_tool = {
-                "name": tool.get("name"),
-                "description": tool.get("description"),
-                "parameters": []
-            }
-            if "parameters" in tool:
-                for param in tool["parameters"]:
-                    simplified_param = {
-                        "name": param.get("name"),
-                        "type": param.get("type"),
-                        "description": param.get("description")
-                    }
-                    if "default" in param:
-                        simplified_param["default"] = param.get("default")
-                    simplified_tool["parameters"].append(simplified_param)
-            simplified_tools.append(simplified_tool)
-        subfix_prompt = json.dumps(simplified_tools, indent=2)
+    # Load tools description fail-closed: bad path/JSON must not crash node init.
+    subfix_prompt = "[]"
+    try:
+        if get_file_type(tools_file) == 'txt':
+            loaded = load_txt_file(tools_file)
+            if loaded is None:
+                rospy.logerr(f"Failed to load tools description from {tools_file}. Using empty tools list.")
+            else:
+                subfix_prompt = loaded
+        else:   # json (or other → try json)
+            if not tools_file:
+                raise ValueError("tools_file path is empty")
+            with open(tools_file, 'r', encoding='utf-8') as f:
+                json_contents = json.load(f)
+            if not isinstance(json_contents, dict):
+                raise ValueError("tools JSON root must be an object")
+            tools_list = json_contents.get('tools', [])
+            if not isinstance(tools_list, list):
+                raise ValueError("tools JSON 'tools' must be a list")
+            simplified_tools = []
+            for tool in tools_list:
+                if not isinstance(tool, dict):
+                    continue
+                simplified_tool = {
+                    "name": tool.get("name"),
+                    "description": tool.get("description"),
+                    "parameters": []
+                }
+                if "parameters" in tool and isinstance(tool["parameters"], list):
+                    for param in tool["parameters"]:
+                        if not isinstance(param, dict):
+                            continue
+                        simplified_param = {
+                            "name": param.get("name"),
+                            "type": param.get("type"),
+                            "description": param.get("description")
+                        }
+                        if "default" in param:
+                            simplified_param["default"] = param.get("default")
+                        simplified_tool["parameters"].append(simplified_param)
+                simplified_tools.append(simplified_tool)
+            subfix_prompt = json.dumps(simplified_tools, indent=2)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as e:
+        rospy.logerr(f"Failed to load tools description from {tools_file}: {e}. Using empty tools list.")
+        subfix_prompt = "[]"
     return prefix_prompt + subfix_prompt
 
 
