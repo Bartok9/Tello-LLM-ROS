@@ -46,11 +46,32 @@ class OllamaClient(LLMBase):
                 model=self.model_name,
                 messages=messages,
             )
-            plan_text = response['message']['content']
-            duration_ns = response.get('total_duration', 0)
-            duration_s = duration_ns / 1_000_000_000.0
-            prompt_tokens = response.get('prompt_eval_count', 0)
-            completion_tokens = response.get('eval_count', 0)
+            if not isinstance(response, dict):
+                error_msg = f"Ollama model '{self.model_name}' returned non-dict response"
+                rospy.logerr(error_msg)
+                return False, "", error_msg, 0.0, 0, 0
+            message = response.get('message')
+            if not isinstance(message, dict):
+                error_msg = f"Ollama model '{self.model_name}' response missing message object"
+                rospy.logerr(error_msg)
+                return False, "", error_msg, 0.0, 0, 0
+            plan_text = message.get('content')
+            if not isinstance(plan_text, str):
+                error_msg = f"Ollama model '{self.model_name}' returned empty or non-str message.content"
+                rospy.logerr(error_msg)
+                return False, "", error_msg, 0.0, 0, 0
+            duration_ns = response.get('total_duration', 0) or 0
+            try:
+                duration_s = float(duration_ns) / 1_000_000_000.0
+            except (TypeError, ValueError):
+                duration_s = 0.0
+            prompt_tokens = response.get('prompt_eval_count', 0) or 0
+            completion_tokens = response.get('eval_count', 0) or 0
+            try:
+                prompt_tokens = int(prompt_tokens)
+                completion_tokens = int(completion_tokens)
+            except (TypeError, ValueError):
+                prompt_tokens, completion_tokens = 0, 0
             return True, plan_text, "", duration_s, prompt_tokens, completion_tokens
 
         except Exception as e:
