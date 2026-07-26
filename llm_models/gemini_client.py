@@ -7,6 +7,17 @@ import requests
 import json
 from .base import LLMBase
 
+def extract_gemini_plan_text(response_data):
+    """Pull plan text from generateContent JSON. Raises ValueError if unusable."""
+    try:
+        plan_text = response_data['candidates'][0]['content']['parts'][0]['text']
+    except (KeyError, IndexError, TypeError) as e:
+        raise ValueError(f"unexpected Gemini response structure: {e}") from e
+    if not isinstance(plan_text, str):
+        raise ValueError(f"Gemini plan text must be str, got {type(plan_text).__name__}")
+    return plan_text.strip()
+
+
 class GeminiClient(LLMBase):
     """
     Google Gemini API implementation of the LLMBase, using direct REST API calls.
@@ -68,26 +79,29 @@ class GeminiClient(LLMBase):
             
             # 从响应中解析出需要的数据
             # 根据 generateContent 的标准响应格式
-            plan_text = response_data['candidates'][0]['content']['parts'][0]['text']
+            plan_text = extract_gemini_plan_text(response_data)
             
             # REST API响应中通常不直接提供token数，需要单独API计算
             # 为保持接口统一，暂时返回0
             prompt_tokens = 0
             completion_tokens = 0
 
-            return True, plan_text.strip(), "", duration_s, prompt_tokens, completion_tokens
+            return True, plan_text, "", duration_s, prompt_tokens, completion_tokens
 
         except requests.exceptions.RequestException as e:
             duration_s = time.time() - start_time
             error_msg = f"An error occurred with Gemini REST API: {e}"
             rospy.logerr(error_msg)
             # 尝试打印API返回的详细错误信息
-            if e.response:
+            if e.response is not None:
                 rospy.logerr(f"API Response: {e.response.text}")
             return False, "", error_msg, duration_s, 0, 0
-        except (KeyError, IndexError) as e:
+        except (KeyError, IndexError, ValueError, TypeError) as e:
             duration_s = time.time() - start_time
             error_msg = f"Failed to parse Gemini API response. Structure might be unexpected. Error: {e}"
             rospy.logerr(error_msg)
-            rospy.logerr(f"Full Response: {response_data}")
+            try:
+                rospy.logerr(f"Full Response: {response_data}")
+            except NameError:
+                pass
             return False, "", error_msg, duration_s, 0, 0
