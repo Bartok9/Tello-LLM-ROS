@@ -5,6 +5,15 @@ import requests
 import time
 from .base import LLMBase
 
+def normalize_custom_plan_text(plan_text, *, missing_ok_default=""):
+    """Return plan_text str or raise ValueError if unusable non-str / null."""
+    if plan_text is None:
+        raise ValueError("plan_text is null")
+    if not isinstance(plan_text, str):
+        raise ValueError(f"plan_text must be str, got {type(plan_text).__name__}")
+    return plan_text
+
+
 class CustomApiClient(LLMBase):
     """
     Client for a custom, self-hosted model API.
@@ -33,10 +42,15 @@ class CustomApiClient(LLMBase):
             response_data = response.json()
 
             if response_data.get("success"):
-                data = response_data.get("data", {})
-                plan_text = data.get("plan_text", "")
+                data = response_data.get("data", {}) or {}
+                try:
+                    plan_text = normalize_custom_plan_text(data.get("plan_text", ""))
+                except ValueError as e:
+                    error_msg = f"Custom API returned unusable plan_text: {e}"
+                    rospy.logerr(error_msg)
+                    return False, "", error_msg, 0.0, 0, 0
                 duration_s = data.get("duration_s", 0.0)
-                usage = data.get("usage", {})
+                usage = data.get("usage", {}) or {}
                 prompt_tokens = usage.get("prompt_tokens", 0)
                 completion_tokens = usage.get("completion_tokens", 0)
                 return True, plan_text, "", duration_s, prompt_tokens, completion_tokens
