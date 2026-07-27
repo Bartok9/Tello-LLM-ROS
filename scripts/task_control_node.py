@@ -15,6 +15,7 @@ from tello_llm_ros.srv import TakePicture, TakePictureRequest, RecordVideo, Reco
 from tello_llm_ros.msg import ExecuteTaskAction, ExecuteTaskFeedback, ExecuteTaskResult
 
 from utils.llm_utils import parse_llm_response
+from utils.float_parse import safe_float_capture
 
 class TaskControlNode:
     def __init__(self):
@@ -104,13 +105,48 @@ class TaskControlNode:
                         match = re.match(trigger['pattern'], clean_input, re.IGNORECASE)
                         if match:
                             params = {}
+                            bad_capture = False
                             for p_def in trigger.get('params', []):
                                 p_name = p_def['name']
-                                val = float(match.group(p_def['group']))
-                                unit = match.group(p_def['unit_group']) if 'unit_group' in p_def else None
-                                if unit in ['cm', 'centimeters']: val /= 100.0
-                                elif unit in ['deg', 'degree', 'degrees']: val *= pi / 180.0
+                                try:
+                                    raw = match.group(p_def['group'])
+                                except IndexError:
+                                    bad_capture = True
+                                    break
+                                val = safe_float_capture(raw)
+                                if val is None:
+                                    # Optional empty groups (e.g. record_video duration) → default later
+                                    if 'default' in p_def:
+                                        val = float(p_def['default'])
+                                    else:
+                                        # look up tool-level default
+                                        default_val = None
+                                        for pd in tool.get('parameters', []) or []:
+                                            if pd.get('name') == p_name and 'default' in pd:
+                                                default_val = pd['default']
+                                                break
+                                        if default_val is not None:
+                                            try:
+                                                val = float(default_val)
+                                            except (TypeError, ValueError):
+                                                bad_capture = True
+                                                break
+                                        else:
+                                            bad_capture = True
+                                            break
+                                unit = None
+                                if 'unit_group' in p_def:
+                                    try:
+                                        unit = match.group(p_def['unit_group'])
+                                    except IndexError:
+                                        unit = None
+                                if unit in ['cm', 'centimeters']:
+                                    val /= 100.0
+                                elif unit in ['deg', 'degree', 'degrees']:
+                                    val *= pi / 180.0
                                 params[p_name] = val
+                            if bad_capture:
+                                continue
                             return tool['name'], params
         return None, None
         
