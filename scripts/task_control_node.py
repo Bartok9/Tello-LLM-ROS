@@ -30,8 +30,16 @@ class TaskControlNode:
             rospy.loginfo(f"Command history enabled with a rolling length of {self.history_length}.")
 
         # --- Load Tool Config and Connect to Drone Services ---
-        with open(tools_config_path, 'r') as f:
-            self.tools_config = json.load(f)
+        from utils.tools_config import load_tools_config
+        ok, tools_cfg, tools_err = load_tools_config(tools_config_path)
+        if not ok or tools_cfg is None:
+            rospy.logerr(
+                f"Failed to load tools_config ({tools_config_path}): {tools_err}. "
+                "Starting with empty tools list (fail-closed)."
+            )
+            self.tools_config = {"tools": []}
+        else:
+            self.tools_config = tools_cfg
         self.service_clients = {}
         self._create_drone_service_clients()
 
