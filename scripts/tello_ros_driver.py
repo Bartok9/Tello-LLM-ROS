@@ -20,6 +20,7 @@ except ImportError:
     Tello = None
 
 from mock_tello import MockTello
+from utils.tello_boot import safe_tello_connect, safe_tello_streamon
 from tello_llm_ros.srv import Move, MoveResponse
 from tello_llm_ros.srv import TakePicture, TakePictureResponse
 from tello_llm_ros.srv import RecordVideo, RecordVideoResponse 
@@ -64,10 +65,21 @@ class TelloROSNode:
                 return
             self.tello = Tello()
 
-        self.tello.connect()
+        ok, err = safe_tello_connect(self.tello)
+        if not ok:
+            rospy.logfatal(f"{self.drone_name} connect failed: {err}")
+            rospy.signal_shutdown(f"tello connect failed: {err}")
+            return
         if not self.use_sim:
-            rospy.loginfo(f"{self.drone_name} battery: {self.tello.get_battery()}%")
-        self.tello.streamon()
+            try:
+                rospy.loginfo(f"{self.drone_name} battery: {self.tello.get_battery()}%")
+            except Exception as e:
+                rospy.logwarn(f"{self.drone_name} battery read failed: {e}")
+        ok, err = safe_tello_streamon(self.tello)
+        if not ok:
+            rospy.logfatal(f"{self.drone_name} streamon failed: {err}")
+            rospy.signal_shutdown(f"tello streamon failed: {err}")
+            return
         
         self.bridge = CvBridge()
 
