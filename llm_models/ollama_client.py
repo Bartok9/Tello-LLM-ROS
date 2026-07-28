@@ -3,6 +3,7 @@
 import rospy
 import ollama
 from .base import LLMBase
+from utils.history_sanitize import sanitize_chat_history
 
 class OllamaClient(LLMBase):
     """
@@ -33,6 +34,7 @@ class OllamaClient(LLMBase):
         # ]
         
         messages = [{"role": "system", "content": system_prompt}]
+        history = sanitize_chat_history(history)
         if history:
             # 假设历史是 [user_msg1, assistant_msg1, user_msg2, ...] 的扁平列表
             # 我们需要将其转换为带 'role' 的字典列表

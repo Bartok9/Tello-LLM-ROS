@@ -5,6 +5,7 @@ import os
 import time
 from openai import OpenAI
 from .base import LLMBase
+from utils.history_sanitize import sanitize_chat_history
 
 class GenericOpenAIClient(LLMBase):
     """
@@ -47,6 +48,7 @@ class GenericOpenAIClient(LLMBase):
         # ]
         
         messages = [{"role": "system", "content": system_prompt}]
+        history = sanitize_chat_history(history)
         if history:
             for i, message_content in enumerate(history):
                 role = "user" if i % 2 == 0 else "assistant"
