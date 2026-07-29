@@ -4,6 +4,14 @@
 from flask import Flask, request, jsonify
 import time
 import random
+import sys
+import os
+
+# Allow importing utils when run as a script from repo root or LAN-Server/
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+from utils.chat_completion_payload import parse_chat_completion_payload
 
 def run_my_custom_model(model_name, system_prompt, user_prompt):
     """
@@ -60,13 +68,13 @@ def handle_chat_completion():
     
     # 1. 解析客户端发来的JSON请求
     try:
-        data = request.json
-        model_name = data.get('model', 'default-model')
-        system_prompt = data.get('system_prompt', '')
-        user_prompt = data.get('user_prompt', '')
-
-        if not user_prompt:
-            return jsonify({"success": False, "error_message": "user_prompt is required."}), 400
+        data = request.get_json(silent=True)
+        ok, err, fields = parse_chat_completion_payload(data)
+        if not ok:
+            return jsonify({"success": False, "error_message": err}), 400
+        model_name = fields['model']
+        system_prompt = fields['system_prompt']
+        user_prompt = fields['user_prompt']
     except Exception as e:
         return jsonify({"success": False, "error_message": f"Invalid request format: {e}"}), 400
 
