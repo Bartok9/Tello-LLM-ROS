@@ -11,7 +11,8 @@ from cv_bridge import CvBridge
 import tf
 from math import sin, cos, pi
 import numpy as np
-import os, threading, sys
+import os
+from utils.video_duration import sanitize_record_duration, threading, sys
 
 try:
     from djitellopy import Tello
@@ -177,6 +178,11 @@ class TelloROSNode:
 
 
     def record_video_service_cb(self, req):
+        ok, duration, err = sanitize_record_duration(getattr(req, "duration", None))
+        if not ok:
+            rospy.logwarn(err)
+            return RecordVideoResponse(success=False, message=err, file_path="")
+
         with self.recording_lock:
             if self.is_recording:
                 message = "Failed to start recording: another recording is already in progress."
@@ -186,12 +192,12 @@ class TelloROSNode:
             self.is_recording = True
 
         # 生成文件名和路径
-        filename = f"tello_video_{rospy.Time.now().to_sec():.0f}_{int(req.duration)}s.mp4"
+        filename = f"tello_video_{rospy.Time.now().to_sec():.0f}_{int(duration)}s.mp4"
         full_path = os.path.join(self.video_save_path, filename)
         # 创建并启动后台线程进行录制
-        recorder_thread = threading.Thread(target=self._video_recorder_thread, args=(req.duration, full_path))
+        recorder_thread = threading.Thread(target=self._video_recorder_thread, args=(duration, full_path))
         recorder_thread.start()
-        message = f"Successfully started recording for {req.duration} seconds. Video will be saved to {full_path}"
+        message = f"Successfully started recording for {duration} seconds. Video will be saved to {full_path}"
         rospy.loginfo(message)
         # 立即返回成功，表示录制已开始
         return RecordVideoResponse(success=True, message=message, file_path=full_path)
