@@ -5,6 +5,7 @@ import os
 import time
 from openai import OpenAI
 from .base import LLMBase
+from utils.openai_choices_guards import extract_chat_plan_text
 
 class GenericOpenAIClient(LLMBase):
     """
@@ -60,12 +61,20 @@ class GenericOpenAIClient(LLMBase):
             )
             duration_s = time.time() - start_time
 
-            plan_text = response.choices[0].message.content
-            usage = response.usage
+            ok, plan_text, extract_err = extract_chat_plan_text(response)
+            usage = getattr(response, "usage", None)
             prompt_tokens = usage.prompt_tokens if usage else 0
             completion_tokens = usage.completion_tokens if usage else 0
 
-            return True, plan_text.strip(), "", duration_s, prompt_tokens, completion_tokens
+            if not ok:
+                rospy.logerr(
+                    "OpenAI-compatible API returned unusable chat payload: {0}".format(
+                        extract_err
+                    )
+                )
+                return False, "", extract_err, duration_s, prompt_tokens, completion_tokens
+
+            return True, plan_text, "", duration_s, prompt_tokens, completion_tokens
 
         except Exception as e:
             duration_s = time.time() - start_time
